@@ -12,7 +12,9 @@ import { seedMotdFeatureSql, seedMotdMakingOfSql, seedMotdWelcomeSql } from './e
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(SCRIPT_DIR, '..');
-const PRISMA_BIN = join(REPO_ROOT, 'node_modules', '.bin', 'prisma');
+// CLI-Entry direkt über Node starten: `node_modules/.bin/prisma` ist unter Windows
+// nur als `prisma.cmd` ausführbar, was execFileSync ohne Shell nicht startet.
+const PRISMA_CLI = join(REPO_ROOT, 'node_modules', 'prisma', 'build', 'index.js');
 const SCHEMA = 'prisma/schema.prisma';
 const MIGRATIONS_DIR = join(REPO_ROOT, 'prisma', 'migrations');
 
@@ -33,9 +35,13 @@ export function listMigrationNames(migrationsDir = MIGRATIONS_DIR) {
     .sort();
 }
 
+function execNodeCli(cli, args, options) {
+  return execFileSync(process.execPath, [cli, ...args], options);
+}
+
 function execPrisma(exec, args) {
   try {
-    const output = exec(PRISMA_BIN, args, {
+    const output = exec(PRISMA_CLI, args, {
       cwd: REPO_ROOT,
       encoding: 'utf8',
       env: process.env,
@@ -57,7 +63,7 @@ export function isEmptyHistoryOnExistingSchema(error) {
   return /P3005/.test(combinedOutput(error));
 }
 
-export function baselineExistingDevSchema(exec = execFileSync, names = listMigrationNames()) {
+export function baselineExistingDevSchema(exec = execNodeCli, names = listMigrationNames()) {
   console.log(
     `>>> Dev-DB ohne Migrationshistorie — markiere ${names.length} vorhandene Migrationen als applied.`,
   );
@@ -66,7 +72,7 @@ export function baselineExistingDevSchema(exec = execFileSync, names = listMigra
   }
 }
 
-export function runMigrateDeploy(exec = execFileSync) {
+export function runMigrateDeploy(exec = execNodeCli) {
   try {
     execPrisma(exec, migrateDeployArgs());
     return;
